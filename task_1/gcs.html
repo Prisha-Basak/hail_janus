@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Arduino Data Plot</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <h1>Live Arduino Data Plot</h1>
+  
+  <button id="connectBtn">Connect to Arduino</button>
+  <button id="simulateBtn">Simulate Data</button>
+
+  <div id="graph" style="width: 100%; height: 400px;"></div>
+  <div id="graph3d" style="width: 100%; height: 500px;"></div>
+
+  <script>
+    let port;
+    let reader;
+    let xData = [], yData = [];
+
+    let latData = [], lonData = [], altData = [];
+
+    // Plotly setup
+    Plotly.newPlot('graph', [{
+      x: xData,
+      y: yData,
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: 'Sensor'
+    }]);
+
+    Plotly.newPlot('graph3d', [{
+      x: lonData,
+      y: latData,
+      z: altData,
+      type: 'scatter3d',
+      mode: 'lines+markers',
+      marker: { size: 3 },
+      line: { width: 2 }
+    }]);
+
+    // Function to read from Arduino via Web Serial API
+    async function connectArduino() {
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        reader = port.readable.getReader();
+        readLoop();
+      } catch(err) {
+        console.error("Arduino connection failed:", err);
+      }
+    }
+
+    async function readLoop() {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          const text = new TextDecoder().decode(value).trim();
+          // Expecting comma-separated values: sensor, latitude ,longitude , altitude
+          const parts = text.split(',');
+          const sensorVal = parseFloat(parts[0]);
+          const lat = parseFloat(parts[1]);
+          const lon = parseFloat(parts[2]);
+          const alt = parseFloat(parts[3]);
+
+          xData.push(new Date());
+          yData.push(sensorVal);
+
+          latData.push(lat);
+          lonData.push(lon);
+          altData.push(alt);
+
+          // Update 2D plot
+          Plotly.update('graph', { x: [xData], y: [yData] });
+
+          // Update 3D plot
+          Plotly.update('graph3d', { x: [lonData], y: [latData], z: [altData] });
+        }
+      }
+    }
+
+    // Simulation function (for when you don’t have hardware)
+    function simulateData() {
+      setInterval(() => {
+        const sensorVal = Math.random() * 100;
+        const lat = 28 + Math.random() * 0.01; 
+        const lon = 77 + Math.random() * 0.01;
+        const alt = 200 + Math.random() * 50;
+
+        xData.push(new Date());
+        yData.push(sensorVal);
+
+        latData.push(lat);
+        lonData.push(lon);
+        altData.push(alt);
+
+        Plotly.update('graph', { x: [xData], y: [yData] });
+        Plotly.update('graph3d', { x: [lonData], y: [latData], z: [altData] });
+      }, 500); // update every 0.5s
+    }
+
+    document.getElementById('connectBtn').addEventListener('click', connectArduino);
+    document.getElementById('simulateBtn').addEventListener('click', simulateData);
+  </script>
+</body>
+</html>
